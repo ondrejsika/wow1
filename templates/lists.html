@@ -1,0 +1,32 @@
+{{define "lists_content"}}
+<div id="lists-app">
+  <section class="add-task">
+    {{template "add_list_form" (listForm .FormName .FormError)}}
+  </section>
+  <ul id="lists-list" class="task-list">
+    {{if .Lists}}
+      {{range .Lists}}{{template "list_row" (listRow .)}}{{end}}
+    {{else}}
+      <li id="empty-state" class="empty-state">No lists yet. Add one above!</li>
+    {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{define "add_list_form"}}
+<form id="add-list-form" class="add-task-form" method="post" action="/lists" hx-post="/lists" hx-target="#lists-app" hx-swap="outerHTML">
+  <input type="text" name="name" placeholder="New list name" maxlength="200" value="{{.Name}}" autofocus>
+  <button type="submit">Add List</button>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+</form>
+{{end}}
+
+{{define "list_row"}}
+<li id="list-{{.List.ID}}" class="task-row">
+  <a class="title" href="/lists/{{.List.ID}}">{{.List.Name}}</a>
+  <span class="actions">
+    <button type="button" class="delete" hx-delete="/lists/{{.List.ID}}" hx-target="#list-{{.List.ID}}" hx-swap="outerHTML" hx-confirm="Delete this list and all its tasks?">Delete</button>
+  </span>
+  {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+</li>
+{{end}}

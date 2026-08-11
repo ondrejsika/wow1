@@ -20,17 +20,38 @@ func validateTitle(title string) (string, error) {
 	return title, nil
 }
 
-func taskIDFromRequest(r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+func idFromPath(r *http.Request, name string) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
 	return id, err == nil
 }
 
-// CreateTask handles POST /tasks: validates the title, creates the task,
-// and re-renders the task-app partial (add-task form plus the full task
-// list) so the new row is always correctly wrapped and in place.
+func taskIDFromRequest(r *http.Request) (int64, bool) {
+	return idFromPath(r, "id")
+}
+
+// CreateTask handles POST /lists/{listID}/tasks: validates the title,
+// creates the task in the given list, and re-renders the task-app partial
+// (add-task form plus the full task list) so the new row is always
+// correctly wrapped and in place.
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := userIDFromContext(ctx)
+
+	listID, ok := idFromPath(r, "listID")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	list, err := h.Store.GetTaskList(ctx, listID, userID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -40,26 +61,30 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	title, err := validateTitle(rawTitle)
 	if err != nil {
-		tasks, listErr := h.Store.ListTasks(ctx, userID)
+		tasks, listErr := h.Store.ListTasks(ctx, userID, listID)
 		if listErr != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		h.render(w, "content", IndexData{Tasks: tasks, FormTitle: rawTitle, FormError: err.Error()})
+		h.render(w, "content", IndexData{List: list, Tasks: tasks, FormTitle: rawTitle, FormError: err.Error()})
 		return
 	}
 
-	if _, err := h.Store.CreateTask(ctx, userID, title); err != nil {
+	if _, err := h.Store.CreateTask(ctx, userID, listID, title); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	tasks, err := h.Store.ListTasks(ctx, userID)
+	tasks, err := h.Store.ListTasks(ctx, userID, listID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	h.render(w, "content", IndexData{Tasks: tasks})
+	h.render(w, "content", IndexData{List: list, Tasks: tasks})
 }
 
 // ToggleTask handles POST /tasks/{id}/toggle: flips done and re-renders the

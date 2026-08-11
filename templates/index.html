@@ -1,7 +1,9 @@
-{{define "content"}}
+{{define "list_content"}}
 <div id="task-app">
+  <p class="back-link"><a href="/">&larr; All lists</a></p>
+  <h2>{{.List.Name}}</h2>
   <section class="add-task">
-    {{template "add_task_form" (form .FormTitle .FormError)}}
+    {{template "add_task_form" (form .List.ID .FormTitle .FormError)}}
   </section>
   <ul id="task-list" class="task-list">
     {{if .Tasks}}
@@ -14,7 +16,7 @@
 {{end}}
 
 {{define "add_task_form"}}
-<form id="add-task-form" class="add-task-form" method="post" action="/tasks" hx-post="/tasks" hx-target="#task-app" hx-swap="outerHTML">
+<form id="add-task-form" class="add-task-form" method="post" action="/lists/{{.ListID}}/tasks" hx-post="/lists/{{.ListID}}/tasks" hx-target="#task-app" hx-swap="outerHTML">
   <input type="text" name="title" placeholder="What needs doing?" maxlength="200" value="{{.Title}}" autofocus>
   <button type="submit">Add</button>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}

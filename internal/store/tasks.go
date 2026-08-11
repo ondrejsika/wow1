@@ -11,19 +11,20 @@ import (
 type Task struct {
 	ID        int64
 	UserID    int64
+	ListID    int64
 	Title     string
 	Done      bool
 	CreatedAt time.Time
 }
 
 const listTasksSQL = `
-SELECT id, user_id, title, done, created_at
+SELECT id, user_id, list_id, title, done, created_at
 FROM tasks
-WHERE user_id = $1
+WHERE list_id = $1 AND user_id = $2
 ORDER BY created_at DESC, id DESC`
 
-func (s *Store) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
-	rows, err := s.Pool.Query(ctx, listTasksSQL, userID)
+func (s *Store) ListTasks(ctx context.Context, userID, listID int64) ([]Task, error) {
+	rows, err := s.Pool.Query(ctx, listTasksSQL, listID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +33,7 @@ func (s *Store) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 	var tasks []Task
 	for rows.Next() {
 		var t Task
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Done, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, t)
@@ -41,7 +42,7 @@ func (s *Store) ListTasks(ctx context.Context, userID int64) ([]Task, error) {
 }
 
 const getTaskSQL = `
-SELECT id, user_id, title, done, created_at
+SELECT id, user_id, list_id, title, done, created_at
 FROM tasks
 WHERE id = $1 AND user_id = $2`
 
@@ -50,7 +51,7 @@ WHERE id = $1 AND user_id = $2`
 func (s *Store) GetTask(ctx context.Context, id, userID int64) (*Task, error) {
 	var t Task
 	err := s.Pool.QueryRow(ctx, getTaskSQL, id, userID).Scan(
-		&t.ID, &t.UserID, &t.Title, &t.Done, &t.CreatedAt,
+		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -62,16 +63,23 @@ func (s *Store) GetTask(ctx context.Context, id, userID int64) (*Task, error) {
 }
 
 const createTaskSQL = `
-INSERT INTO tasks (user_id, title)
-VALUES ($1, $2)
-RETURNING id, user_id, title, done, created_at`
+INSERT INTO tasks (user_id, list_id, title)
+SELECT $1, tl.id, $3
+FROM task_lists tl
+WHERE tl.id = $2 AND tl.user_id = $1
+RETURNING id, user_id, list_id, title, done, created_at`
 
-func (s *Store) CreateTask(ctx context.Context, userID int64, title string) (*Task, error) {
+// CreateTask creates a task in listID, scoped to userID. Returns
+// ErrNotFound if the list does not exist or does not belong to userID.
+func (s *Store) CreateTask(ctx context.Context, userID, listID int64, title string) (*Task, error) {
 	var t Task
-	err := s.Pool.QueryRow(ctx, createTaskSQL, userID, title).Scan(
-		&t.ID, &t.UserID, &t.Title, &t.Done, &t.CreatedAt,
+	err := s.Pool.QueryRow(ctx, createTaskSQL, userID, listID, title).Scan(
+		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return &t, nil
@@ -80,7 +88,7 @@ func (s *Store) CreateTask(ctx context.Context, userID int64, title string) (*Ta
 const updateTaskTitleSQL = `
 UPDATE tasks SET title = $1
 WHERE id = $2 AND user_id = $3 AND done = false
-RETURNING id, user_id, title, done, created_at`
+RETURNING id, user_id, list_id, title, done, created_at`
 
 // UpdateTaskTitle updates a task's title, scoped to userID, and only if the
 // task is not done. Returns ErrNotFound if the task doesn't exist, isn't
@@ -88,7 +96,7 @@ RETURNING id, user_id, title, done, created_at`
 func (s *Store) UpdateTaskTitle(ctx context.Context, id, userID int64, title string) (*Task, error) {
 	var t Task
 	err := s.Pool.QueryRow(ctx, updateTaskTitleSQL, title, id, userID).Scan(
-		&t.ID, &t.UserID, &t.Title, &t.Done, &t.CreatedAt,
+		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -102,12 +110,12 @@ func (s *Store) UpdateTaskTitle(ctx context.Context, id, userID int64, title str
 const toggleTaskSQL = `
 UPDATE tasks SET done = NOT done
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, title, done, created_at`
+RETURNING id, user_id, list_id, title, done, created_at`
 
 func (s *Store) ToggleTask(ctx context.Context, id, userID int64) (*Task, error) {
 	var t Task
 	err := s.Pool.QueryRow(ctx, toggleTaskSQL, id, userID).Scan(
-		&t.ID, &t.UserID, &t.Title, &t.Done, &t.CreatedAt,
+		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

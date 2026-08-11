@@ -22,3 +22,11 @@
 </body>
 </html>
 {{end}}
+
+{{define "content"}}
+{{if .List}}
+  {{template "list_content" .}}
+{{else}}
+  {{template "lists_content" .}}
+{{end}}
+{{end}}

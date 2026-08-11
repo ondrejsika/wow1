@@ -64,7 +64,10 @@ func Run(cfg *config.Config, templatesFS, staticFS, migrationsFS embed.FS) error
 	mux.HandleFunc("GET /logout", oidcauth.Logout(sessions))
 
 	mux.HandleFunc("GET /{$}", h.RequireAuth(h.Index))
-	mux.HandleFunc("POST /tasks", h.RequireAuth(h.CreateTask))
+	mux.HandleFunc("POST /lists", h.RequireAuth(h.CreateTaskList))
+	mux.HandleFunc("GET /lists/{id}", h.RequireAuth(h.ViewList))
+	mux.HandleFunc("DELETE /lists/{id}", h.RequireAuth(h.DeleteTaskList))
+	mux.HandleFunc("POST /lists/{listID}/tasks", h.RequireAuth(h.CreateTask))
 	mux.HandleFunc("GET /tasks/{id}", h.RequireAuth(h.GetTaskRow))
 	mux.HandleFunc("PUT /tasks/{id}", h.RequireAuth(h.UpdateTask))
 	mux.HandleFunc("DELETE /tasks/{id}", h.RequireAuth(h.DeleteTask))
@@ -93,11 +96,17 @@ func Run(cfg *config.Config, templatesFS, staticFS, migrationsFS embed.FS) error
 
 func parseTemplates(templatesFS embed.FS) (*template.Template, error) {
 	funcs := template.FuncMap{
-		"form": func(title, errMsg string) handlers.AddTaskFormData {
-			return handlers.AddTaskFormData{Title: title, Error: errMsg}
+		"form": func(listID int64, title, errMsg string) handlers.AddTaskFormData {
+			return handlers.AddTaskFormData{ListID: listID, Title: title, Error: errMsg}
 		},
 		"row": func(t store.Task) handlers.TaskRowData {
 			return handlers.TaskRowData{Task: t}
+		},
+		"listForm": func(name, errMsg string) handlers.AddListFormData {
+			return handlers.AddListFormData{Name: name, Error: errMsg}
+		},
+		"listRow": func(l store.TaskList) handlers.TaskListRowData {
+			return handlers.TaskListRowData{List: l}
 		},
 	}
 	return template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/*.html")

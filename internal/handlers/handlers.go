@@ -46,25 +46,43 @@ func userIDFromContext(ctx context.Context) int64 {
 }
 
 // IndexData is the root template data for the full page render, and for
-// re-rendering the "content" partial (task-app) after creating a task.
+// re-rendering the "content" partial after creating a list or a task.
+// List is nil on the home page (lists overview) and set when viewing a
+// single list's tasks.
 type IndexData struct {
 	User  *store.User
+	Lists []store.TaskList
+	List  *store.TaskList
 	Tasks []store.Task
-	// FormTitle and FormError repopulate the add-task form when a create
-	// fails validation.
+	// FormName repopulates the add-list form when a create fails
+	// validation. FormTitle and FormError repopulate the add-task form.
+	FormName  string
 	FormTitle string
 	FormError string
 }
 
 // AddTaskFormData is the data for the standalone add-task form partial.
 type AddTaskFormData struct {
-	Title string
+	ListID int64
+	Title  string
+	Error  string
+}
+
+// AddListFormData is the data for the standalone add-list form partial.
+type AddListFormData struct {
+	Name  string
 	Error string
 }
 
 // TaskRowData is the data for a single task row partial.
 type TaskRowData struct {
 	Task  store.Task
+	Error string
+}
+
+// TaskListRowData is the data for a single task list row partial.
+type TaskListRowData struct {
+	List  store.TaskList
 	Error string
 }
 
