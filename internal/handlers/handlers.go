@@ -45,10 +45,15 @@ func userIDFromContext(ctx context.Context) int64 {
 	return id
 }
 
-// IndexData is the root template data for the full page render.
+// IndexData is the root template data for the full page render, and for
+// re-rendering the "content" partial (task-app) after creating a task.
 type IndexData struct {
 	User  *store.User
 	Tasks []store.Task
+	// FormTitle and FormError repopulate the add-task form when a create
+	// fails validation.
+	FormTitle string
+	FormError string
 }
 
 // AddTaskFormData is the data for the standalone add-task form partial.
@@ -61,9 +66,6 @@ type AddTaskFormData struct {
 type TaskRowData struct {
 	Task  store.Task
 	Error string
-	// OOB, if set, marks the row for htmx out-of-band swapping using this
-	// swap style (e.g. "afterbegin:#task-list").
-	OOB string
 }
 
 func (h *Handlers) render(w http.ResponseWriter, name string, data any) {

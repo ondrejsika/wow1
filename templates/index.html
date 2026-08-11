@@ -1,18 +1,20 @@
 {{define "content"}}
-<section class="add-task">
-  {{template "add_task_form" (form "" "")}}
-</section>
-<ul id="task-list" class="task-list">
-  {{if .Tasks}}
-    {{range .Tasks}}{{template "task_row" (row .)}}{{end}}
-  {{else}}
-    <li id="empty-state" class="empty-state">No tasks yet. Add one above!</li>
-  {{end}}
-</ul>
+<div id="task-app">
+  <section class="add-task">
+    {{template "add_task_form" (form .FormTitle .FormError)}}
+  </section>
+  <ul id="task-list" class="task-list">
+    {{if .Tasks}}
+      {{range .Tasks}}{{template "task_row" (row .)}}{{end}}
+    {{else}}
+      <li id="empty-state" class="empty-state">No tasks yet. Add one above!</li>
+    {{end}}
+  </ul>
+</div>
 {{end}}
 
 {{define "add_task_form"}}
-<form id="add-task-form" class="add-task-form" hx-post="/tasks" hx-target="#add-task-form" hx-swap="outerHTML">
+<form id="add-task-form" class="add-task-form" method="post" action="/tasks" hx-post="/tasks" hx-target="#task-app" hx-swap="outerHTML">
   <input type="text" name="title" placeholder="What needs doing?" maxlength="200" value="{{.Title}}" autofocus>
   <button type="submit">Add</button>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}

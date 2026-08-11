@@ -26,8 +26,8 @@ func taskIDFromRequest(r *http.Request) (int64, bool) {
 }
 
 // CreateTask handles POST /tasks: validates the title, creates the task,
-// and responds with a fresh (empty) add-task form plus an out-of-band
-// insertion of the new row at the top of the list.
+// and re-renders the task-app partial (add-task form plus the full task
+// list) so the new row is always correctly wrapped and in place.
 func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := userIDFromContext(ctx)
@@ -40,20 +40,26 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	title, err := validateTitle(rawTitle)
 	if err != nil {
-		h.render(w, "add_task_form", AddTaskFormData{Title: rawTitle, Error: err.Error()})
+		tasks, listErr := h.Store.ListTasks(ctx, userID)
+		if listErr != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		h.render(w, "content", IndexData{Tasks: tasks, FormTitle: rawTitle, FormError: err.Error()})
 		return
 	}
 
-	task, err := h.Store.CreateTask(ctx, userID, title)
-	if err != nil {
+	if _, err := h.Store.CreateTask(ctx, userID, title); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = h.Templates.ExecuteTemplate(w, "add_task_form", AddTaskFormData{})
-	_ = h.Templates.ExecuteTemplate(w, "task_row", TaskRowData{Task: *task, OOB: "afterbegin:#task-list"})
-	_ = h.Templates.ExecuteTemplate(w, "empty_state_remove", nil)
+	tasks, err := h.Store.ListTasks(ctx, userID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.render(w, "content", IndexData{Tasks: tasks})
 }
 
 // ToggleTask handles POST /tasks/{id}/toggle: flips done and re-renders the

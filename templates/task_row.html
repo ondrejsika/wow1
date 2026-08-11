@@ -1,5 +1,5 @@
 {{define "task_row"}}
-<li id="task-{{.Task.ID}}" class="task-row{{if .Task.Done}} done{{end}}"{{if .OOB}} hx-swap-oob="{{.OOB}}"{{end}}>
+<li id="task-{{.Task.ID}}" class="task-row{{if .Task.Done}} done{{end}}">
   <input type="checkbox" class="toggle" hx-post="/tasks/{{.Task.ID}}/toggle" hx-target="#task-{{.Task.ID}}" hx-swap="outerHTML" hx-trigger="change" {{if .Task.Done}}checked{{end}}>
   <span class="title">{{.Task.Title}}</span>
   <span class="actions">
@@ -10,8 +10,4 @@
   </span>
   {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
 </li>
-{{end}}
-
-{{define "empty_state_remove"}}
-<li id="empty-state" hx-swap-oob="delete"></li>
 {{end}}
