@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wow1
+      POSTGRES_PASSWORD: wow1
+      POSTGRES_DB: wow1
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wow1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      WOW1_DATABASE_URL: postgres://wow1:wow1@db:5432/wow1?sslmode=disable
+      WOW1_LISTEN_ADDR: :8080
+      WOW1_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL}
+      WOW1_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      WOW1_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      WOW1_OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-http://localhost:8080/auth/callback}
+      WOW1_SESSION_SECRET: ${SESSION_SECRET:-dev-only-change-me}
+
+volumes:
+  db-data:

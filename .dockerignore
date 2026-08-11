@@ -1,0 +1,7 @@
+.git
+*.md
+compose.yaml
+Dockerfile
+.env
+.env.example
+wow1

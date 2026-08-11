@@ -12,6 +12,8 @@
 /temp
 *.log
 *.backup
+.env
+/wow1
 *.local.sh
 *.local.yml
 *.local.yaml

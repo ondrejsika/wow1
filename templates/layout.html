@@ -1,0 +1,24 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wow1 - TODO</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1><a href="/">wow1</a></h1>
+    <div class="user-info">
+      <span>{{.User.Email}}</span>
+      <a href="/logout">Logout</a>
+    </div>
+  </header>
+  <main>
+    {{template "content" .}}
+  </main>
+</body>
+</html>
+{{end}}
