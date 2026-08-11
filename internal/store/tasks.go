@@ -5,135 +5,87 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"gorm.io/gorm"
 )
 
 type Task struct {
-	ID        int64
-	UserID    int64
-	ListID    int64
-	Title     string
-	Done      bool
+	ID        int64  `gorm:"primaryKey"`
+	UserID    int64  `gorm:"not null;index"`
+	ListID    int64  `gorm:"not null;index"`
+	Title     string `gorm:"not null"`
+	Done      bool   `gorm:"not null;default:false"`
 	CreatedAt time.Time
 }
 
-const listTasksSQL = `
-SELECT id, user_id, list_id, title, done, created_at
-FROM tasks
-WHERE list_id = $1 AND user_id = $2
-ORDER BY created_at DESC, id DESC`
-
 func (s *Store) ListTasks(ctx context.Context, userID, listID int64) ([]Task, error) {
-	rows, err := s.Pool.Query(ctx, listTasksSQL, listID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var tasks []Task
-	for rows.Next() {
-		var t Task
-		if err := rows.Scan(&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, t)
-	}
-	return tasks, rows.Err()
+	err := s.DB.WithContext(ctx).
+		Where("list_id = ? AND user_id = ?", listID, userID).
+		Order("created_at DESC, id DESC").
+		Find(&tasks).Error
+	return tasks, err
 }
-
-const getTaskSQL = `
-SELECT id, user_id, list_id, title, done, created_at
-FROM tasks
-WHERE id = $1 AND user_id = $2`
 
 // GetTask fetches a task by id, scoped to userID. Returns ErrNotFound if the
 // task does not exist or does not belong to userID.
 func (s *Store) GetTask(ctx context.Context, id, userID int64) (*Task, error) {
 	var t Task
-	err := s.Pool.QueryRow(ctx, getTaskSQL, id, userID).Scan(
-		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
-	)
+	err := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&t).Error
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	return &t, nil
 }
-
-const createTaskSQL = `
-INSERT INTO tasks (user_id, list_id, title)
-SELECT $1, tl.id, $3
-FROM task_lists tl
-WHERE tl.id = $2 AND tl.user_id = $1
-RETURNING id, user_id, list_id, title, done, created_at`
 
 // CreateTask creates a task in listID, scoped to userID. Returns
 // ErrNotFound if the list does not exist or does not belong to userID.
 func (s *Store) CreateTask(ctx context.Context, userID, listID int64, title string) (*Task, error) {
-	var t Task
-	err := s.Pool.QueryRow(ctx, createTaskSQL, userID, listID, title).Scan(
-		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
+	if _, err := s.GetTaskList(ctx, listID, userID); err != nil {
+		return nil, err
+	}
+	t := Task{UserID: userID, ListID: listID, Title: title}
+	if err := s.DB.WithContext(ctx).Create(&t).Error; err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
-
-const updateTaskTitleSQL = `
-UPDATE tasks SET title = $1
-WHERE id = $2 AND user_id = $3 AND done = false
-RETURNING id, user_id, list_id, title, done, created_at`
 
 // UpdateTaskTitle updates a task's title, scoped to userID, and only if the
 // task is not done. Returns ErrNotFound if the task doesn't exist, isn't
 // owned by userID, or is already done.
 func (s *Store) UpdateTaskTitle(ctx context.Context, id, userID int64, title string) (*Task, error) {
-	var t Task
-	err := s.Pool.QueryRow(ctx, updateTaskTitleSQL, title, id, userID).Scan(
-		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, err
+	res := s.DB.WithContext(ctx).Model(&Task{}).
+		Where("id = ? AND user_id = ? AND done = ?", id, userID, false).
+		Update("title", title)
+	if res.Error != nil {
+		return nil, res.Error
 	}
-	return &t, nil
+	if res.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+	return s.GetTask(ctx, id, userID)
 }
-
-const toggleTaskSQL = `
-UPDATE tasks SET done = NOT done
-WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, list_id, title, done, created_at`
 
 func (s *Store) ToggleTask(ctx context.Context, id, userID int64) (*Task, error) {
-	var t Task
-	err := s.Pool.QueryRow(ctx, toggleTaskSQL, id, userID).Scan(
-		&t.ID, &t.UserID, &t.ListID, &t.Title, &t.Done, &t.CreatedAt,
-	)
+	task, err := s.GetTask(ctx, id, userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
 		return nil, err
 	}
-	return &t, nil
+	if err := s.DB.WithContext(ctx).Model(task).Update("done", !task.Done).Error; err != nil {
+		return nil, err
+	}
+	return task, nil
 }
 
-const deleteTaskSQL = `DELETE FROM tasks WHERE id = $1 AND user_id = $2`
-
 func (s *Store) DeleteTask(ctx context.Context, id, userID int64) error {
-	tag, err := s.Pool.Exec(ctx, deleteTaskSQL, id, userID)
-	if err != nil {
-		return err
+	res := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).Delete(&Task{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if tag.RowsAffected() == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil

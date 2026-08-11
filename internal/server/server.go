@@ -24,13 +24,9 @@ import (
 
 // Run starts the wow1 web server and blocks until it shuts down (on
 // SIGINT/SIGTERM) or fails to start.
-func Run(cfg *config.Config, templatesFS, staticFS, migrationsFS embed.FS) error {
+func Run(cfg *config.Config, templatesFS, staticFS embed.FS) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
-	if err := store.Migrate(cfg.DatabaseURL, migrationsFS); err != nil {
-		return fmt.Errorf("migrate: %w", err)
-	}
 
 	st, err := store.New(ctx, cfg.DatabaseURL)
 	if err != nil {

@@ -23,7 +23,7 @@ var flagNames = []string{
 	"session-secret",
 }
 
-func newServerCmd(templatesFS, staticFS, migrationsFS embed.FS) *cobra.Command {
+func newServerCmd(templatesFS, staticFS embed.FS) *cobra.Command {
 	v := viper.New()
 	v.SetEnvPrefix("WOW1")
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -45,7 +45,7 @@ func newServerCmd(templatesFS, staticFS, migrationsFS embed.FS) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return server.Run(cfg, templatesFS, staticFS, migrationsFS)
+			return server.Run(cfg, templatesFS, staticFS)
 		},
 	}
 

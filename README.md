@@ -2,9 +2,10 @@
 
 A minimal, self-contained per-user TODO list web app in Go, with login via
 any OpenID Connect provider. Server-rendered HTML + [htmx](https://htmx.org)
-(vendored locally), PostgreSQL via `pgx/v5`, no web framework, no ORM,
-no build step for the frontend. Templates, static assets, and database
-migrations are compiled into a single binary via `embed.FS`.
+(vendored locally), PostgreSQL via [GORM](https://gorm.io), no web
+framework, no build step for the frontend. Templates and static assets are
+compiled into a single binary via `embed.FS`; the database schema is kept
+in sync with the Go models via GORM `AutoMigrate` on startup.
 
 ## Run with Docker Compose
 
@@ -14,7 +15,7 @@ docker compose up --build
 ```
 
 The app will be at http://localhost:8080. Postgres 17 runs alongside it
-and migrations are applied automatically on startup.
+and the schema is created/updated automatically on startup.
 
 ## Run locally (Go + your own Postgres)
 
@@ -43,7 +44,7 @@ CGO_ENABLED=0 go build -ldflags="-s -w" -o wow1 .
 ```
 
 The result is a single, statically-linked, self-contained binary (no
-templates/static/migrations directories needed alongside it at runtime).
+templates/static directories needed alongside it at runtime).
 
 ## CLI and configuration
 
@@ -107,21 +108,25 @@ and `name` claims from the ID token.
 
 ## How it works
 
-- `main.go` embeds `templates/`, `static/`, and `migrations/` and hands
-  them to `internal/cli`.
+- `main.go` embeds `templates/` and `static/` and hands them to
+  `internal/cli`.
 - `internal/cli` defines the cobra commands (`server`, `version`) and, for
   `server`, binds flags to viper with the `WOW1_` env prefix, then builds
   a `config.Config`. Nothing outside `internal/cli` touches viper.
 - `internal/config` is a plain struct plus validation — it has no
   knowledge of flags or env vars.
-- `internal/server` wires up the database pool, migrations, OIDC, and
-  routing from a `config.Config`, and runs the HTTP server.
-- `internal/store` holds `pgxpool`-backed queries and runs migrations via
-  `golang-migrate` (iofs source, reading from the embedded FS).
-- `internal/session` implements a signed, stateless session cookie (no
-  session store) using HMAC-SHA256 over `SESSION_SECRET`.
-- `internal/oidcauth` implements the OIDC authorization code flow with
-  state and nonce verification, and upserts the user on login.
+- `internal/server` wires up the database connection, OIDC, and routing
+  from a `config.Config`, and runs the HTTP server.
+- `internal/store` holds [GORM](https://gorm.io)-backed models and
+  queries; `AutoMigrate` creates/updates the schema on startup, so there
+  are no hand-written migration files.
+- `internal/session` implements signed session cookies via
+  [gorilla/sessions](https://github.com/gorilla/sessions), keyed by
+  `SESSION_SECRET`.
+- `internal/oidcauth` implements the OIDC authorization code flow using
+  [zitadel/oidc](https://github.com/zitadel/oidc)'s relying-party
+  helpers (state/cookie/token-exchange/verification), and upserts the
+  user on login.
 - `internal/handlers` implements the task CRUD handlers. Every query is
   scoped to the session's `user_id`; a task that doesn't belong to the
   caller looks like it doesn't exist (404).
